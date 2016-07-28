@@ -5,29 +5,45 @@ from debian.debian_support import BaseVersion as _BaseVersion
 
 class BaseVersion(_BaseVersion):
     def _compare(self, other):
-        def deb_sort(a, b):
+        def cmp_part(a, b):
+            """ Compare a part of a full Debian version string. """
+
             def normalize(ver_str):
+                """ Pull apart a Debian version fragment into a series of
+                    either numeric or non-integer tokens.  For numeric tokens,
+                    those are then converted into actual integers.
+                """
+                # Deal with optional parts.
                 ver_str = "0" if not ver_str else ver_str
                 return [int(part) if part.isdigit() else part for part in re.findall(r"[^\d]+|\d+", ver_str)]
+
+            # Magical Debian character sort order and the less magical lambda
+            # that uses it to generate the custom sort order.
             order = '~:' \
                     '0123456789' \
                     'ABCDEFGHIJKLMNOPQRSTUVWXYZ' \
                     'abcdefghijklmnopqrstuvwxyz' \
                     '-+.'
             key = lambda word: [order.index(c) for c in word]
-            a = normalize(a)
-            b = normalize(b)
-            values_len_max = max(len(a), len(b))
-            for value in [a, b]:
-                value_len = len(value)
-                if value_len < values_len_max:
-                    value.extend([0] * (values_len_max - value_len))
+
+            # Tokenize and backfill the values being compared so they are of
+            # the same length.
+            values = [normalize(a), normalize(b)]
+            values_len_max = max(*values)
+            for value in values:
+                if len(value) < values_len_max:
+                    value.extend([0] * (values_len_max - len(value)))
+
+            # Compare all of the tokens until a difference is found.
             cmp_result = 0
             for idx in range(len(a)):
                 cmp_values = [a[idx], b[idx]]
                 if all(isinstance(value, int) for value in cmp_values):
+                    # If both tokens are integers, it's easy.
                     cmp_result = cmp(*cmp_values)
                 else:
+                    # Otherwise, if either happens to be an integer put it
+                    # through the grinder as a string.
                     cmp_values = [str(value) for value in cmp_values]
                     if len(set(cmp_values)) != 1:
                         if cmp_values[0] is sorted(cmp_values, key=key)[0]:
@@ -37,21 +53,27 @@ class BaseVersion(_BaseVersion):
                 if cmp_result != 0:
                     break
             return cmp_result
+
+        # Types changed while you wait!
         if isinstance(other, basestring):
             other = BaseVersion(other)
         elif not isinstance(other, BaseVersion):
-            raise TypeError('Can only compare BaseVersion objects')
-        # First compare epochs, if there isn't one treat it as 0
-        epoch_self = 0 if self.epoch is None else int(self.epoch)
-        epoch_other = 0 if other.epoch is None else int(other.epoch)
-        epoch = epoch_self.__cmp__(epoch_other)
+            raise TypeError('Can only compare BaseVersion objects!')
+
+        # First, compare epochs.  If there isn't one treat it as 0
+        epochs = [0 if self.epoch is None else int(self.epoch),
+                  0 if other.epoch is None else int(other.epoch)]
+        epoch = cmp(*epochs)
         if epoch:
             return epoch
-        # Second compare upstream_version
+
+        # Next, compare the upstream_version part.
         upstream = deb_sort(self.upstream_version, other.upstream_version)
         if upstream:
             return upstream
-        # Lastly, compare debian_version
+
+        # Lastly, compare debian_version.  Even if this is not part of the
+        # full version string, it will be compared as "0".
         debian = deb_sort(self.debian_version, other.debian_version)
         return debian
 
