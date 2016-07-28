@@ -19,7 +19,10 @@ class BaseVersion(_BaseVersion):
 
             # Magical Debian character sort order and the less magical lambda
             # that uses it to generate the custom sort order.
-            order = '~:' \
+            # Delete is not a valid character in Debian versions, thus it is
+            # perfect for padding strings of different lengths when comparing
+            # version fragments that have tilde characters.
+            order = '~\x7f:' \
                     '0123456789' \
                     'ABCDEFGHIJKLMNOPQRSTUVWXYZ' \
                     'abcdefghijklmnopqrstuvwxyz' \
@@ -30,15 +33,14 @@ class BaseVersion(_BaseVersion):
             # the same length.
             a = normalize(a)
             b = normalize(b)
-            values_len_max = max(len(a), len(b))
+            values_len_max = len(max([a, b], key=len))
             for value in [a, b]:
                 if len(value) < values_len_max:
                     value.extend([0] * (values_len_max - len(value)))
 
             # Compare all of the tokens until a difference is found.
             cmp_result = 0
-            for idx in range(len(a)):
-                cmp_values = [a[idx], b[idx]]
+            for cmp_values in zip(a, b):
                 if all(isinstance(value, int) for value in cmp_values):
                     # If both tokens are integers, it's easy.
                     cmp_result = cmp(*cmp_values)
@@ -46,6 +48,13 @@ class BaseVersion(_BaseVersion):
                     # Otherwise, if either happens to be an integer put it
                     # through the grinder as a string.
                     cmp_values = [str(value) for value in cmp_values]
+
+                    # Pad mismatched strings with ASCII DEL (0x7f) for
+                    # comparisons involving tilde
+                    cmp_values_len_max = len(max(cmp_values, key=len))
+                    cmp_values = [item.ljust(cmp_values_len_max, '\x7f') 
+                                    for item in cmp_values]
+
                     if len(set(cmp_values)) != 1:
                         if cmp_values[0] is sorted(cmp_values, key=key)[0]:
                             cmp_result = -1
@@ -141,7 +150,9 @@ test_data = [(('7.6p2-4', '7.6-0'), 1),
              (('3a9.8', '3~10'), 1),
              (('1.4+OOo3.0.0~', '1.4+OOo3.0.0-4'), -1),
              (('2.4.7-1', '2.4.7-z'), -1),
-             (('1.002-1+b2', '1.00'), 1)
+             (('1.002-1+b2', '1.00'), 1),
+             (('1~~a', '1~'), -1),
+             (('1~', '1~~'), 1)
             ]
 
 def main():
