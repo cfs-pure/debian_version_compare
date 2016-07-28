@@ -28,9 +28,10 @@ class BaseVersion(_BaseVersion):
 
             # Tokenize and backfill the values being compared so they are of
             # the same length.
-            values = [normalize(a), normalize(b)]
-            values_len_max = max(*values)
-            for value in values:
+            a = normalize(a)
+            b = normalize(b)
+            values_len_max = max(len(a), len(b))
+            for value in [a, b]:
                 if len(value) < values_len_max:
                     value.extend([0] * (values_len_max - len(value)))
 
