@@ -68,13 +68,13 @@ class BaseVersion(_BaseVersion):
             return epoch
 
         # Next, compare the upstream_version part.
-        upstream = deb_sort(self.upstream_version, other.upstream_version)
+        upstream = cmp_part(self.upstream_version, other.upstream_version)
         if upstream:
             return upstream
 
         # Lastly, compare debian_version.  Even if this is not part of the
         # full version string, it will be compared as "0".
-        debian = deb_sort(self.debian_version, other.debian_version)
+        debian = cmp_part(self.debian_version, other.debian_version)
         return debian
 
 test_data = [(('7.6p2-4', '7.6-0'), 1),
